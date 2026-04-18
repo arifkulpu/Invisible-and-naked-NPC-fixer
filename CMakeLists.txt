@@ -14,6 +14,7 @@ target_sources(${PROJECT_NAME}
     PRIVATE 
         src/main.cpp
         src/VisibilityFixer.cpp
+        src/Settings.h
         src/PCH.h
 )
 
@@ -25,7 +26,9 @@ target_link_libraries(${PROJECT_NAME}
 # SKSE Plugin information
 target_compile_definitions(${PROJECT_NAME}
     PRIVATE
+        SKSE_SUPPORT_SSE
         SKSE_SUPPORT_AE
+        SKSE_SUPPORT_VR
         PROJECT_NAME="${PROJECT_NAME}"
 )
 

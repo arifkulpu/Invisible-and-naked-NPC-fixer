@@ -1,5 +1,6 @@
 #include "PCH.h"
 #include "VisibilityFixer.h"
+#include "Settings.h"
 
 #include <unordered_set>
 #include <vector>
@@ -33,13 +34,42 @@ namespace VisibilityFixer
         logger::info("VisibilityFixer: Fix listesi ve baslangic zamanlayicisi sifirlandi.");
     }
 
+    bool IsHumanoidNPC(RE::Actor* a_actor)
+    {
+        if (!a_actor) return false;
+        
+        auto race = a_actor->GetRace();
+        if (!race) return false;
+
+        // 1. Anahtar kelime kontrolü
+        if (race->HasKeywordString("ActorTypeNPC") || race->HasKeywordString("ActorTypeHumanoid")) {
+            return true;
+        }
+
+        // 2. Irk bayrakları kontrolü (Oynanabilir veya FaceGen verisi olanlar insansıdır)
+        if (race->data.flags.any(RE::RACE_DATA::Flag::kPlayable, RE::RACE_DATA::Flag::kFaceGenHead)) {
+            return true;
+        }
+
+        // 3. Kıyafet tanımlı mı? (Yeni ırk modları için en sağlam yöntem)
+        auto npcBase = a_actor->GetActorBase();
+        if (npcBase && (npcBase->defaultOutfit || npcBase->sleepOutfit)) {
+            return true;
+        }
+
+        return false;
+    }
+
     void ProcessActorFix(RE::Actor* actor)
     {
-        if (!actor) return;
-        
-        auto formID = actor->GetFormID();
+        if (!actor || actor->IsDeleted() || !actor->Is3DLoaded()) return;
+
         auto root = actor->Get3D();
+        auto formID = actor->GetFormID();
         
+        // Aktörün geçerli bir form tipine sahip olduğundan emin ol
+        if (actor->GetFormType() != RE::FormType::ActorCharacter) return;
+
         logger::info("[Düzeltme] {} ({:08X}) analizi basladi...", actor->GetName(), formID);
 
         bool fixed = false;
@@ -63,12 +93,13 @@ namespace VisibilityFixer
         } 
         // 2. Çıplaklık ve Kıyafet Düzeltmesi
         else {
-            auto race = actor->GetRace();
-            bool isNPC = race && race->HasKeywordString("ActorTypeNPC");
-            
-            if (isNPC) {
-                // Vücut zırhı var mı?
-                auto chestArmor = actor->GetWornArmor(RE::BIPED_MODEL::BipedObjectSlot::kBody);
+            if (IsHumanoidNPC(actor)) {
+                // Vücut zırhı var mı? (currentProcess kontrolü ile güvenli çağrı)
+                RE::TESObjectARMO* chestArmor = nullptr;
+                if (actor->GetActorRuntimeData().currentProcess) {
+                    chestArmor = actor->GetWornArmor(RE::BIPED_MODEL::BipedObjectSlot::kBody);
+                }
+
                 if (!chestArmor) {
                     logger::info(" -> Çıplaklık tespit edildi. Envanter taranıyor...");
                     
@@ -79,7 +110,7 @@ namespace VisibilityFixer
                             auto armor = item->As<RE::TESObjectARMO>();
                             if (armor && armor->HasPartOf(RE::BIPED_MODEL::BipedObjectSlot::kBody)) {
                                 logger::info(" -> Envanterde zırh bulundu: {}. Giydiriliyor...", armor->GetName());
-                                actor->AddWornItem(armor, 1, true, 0, 0);
+                                RE::ActorEquipManager::GetSingleton()->EquipObject(actor, armor, nullptr, 1, nullptr, true, false, false, false);
                                 fixed = true;
                                 break;
                             }
@@ -116,18 +147,18 @@ namespace VisibilityFixer
 
     void FixActor(RE::Actor* actor, std::chrono::steady_clock::time_point now, bool a_force)
     {
-        if (!actor || actor->IsPlayerRef()) return;
-        if (actor->IsDisabled()) return; // Sadece tamamen devredışı kalanları atla, ölüleri (cesetleri) atlama
+        if (!actor || actor->IsPlayerRef() || actor->IsDeleted()) return;
+        if (actor->IsDisabled()) return; 
         
-        // 3D yüklü değilse işlem yapma (3D check doğru yap kuralı)
-        if (!actor->Is3DLoaded()) return;
+        // 3D yüklü değilse veya aktör geçerli değilse işlem yapma
+        if (!actor->Is3DLoaded() || actor->GetFormType() != RE::FormType::ActorCharacter) return;
 
         auto formID = actor->GetFormID();
 
-        // 60 saniyelik bekleme süresi kontrolü (Performans ve tekrar deneme dengesi)
+        // Bekleme süresi kontrolü (INI'den alınan değer)
         auto it = actorFixTimestamps.find(formID);
         if (!a_force && it != actorFixTimestamps.end()) {
-            if (now - it->second < 60s) {
+            if (now - it->second < std::chrono::seconds(Settings::GetSingleton().cooldown)) {
                 return;
             }
         }
@@ -152,9 +183,12 @@ namespace VisibilityFixer
                 
                 // Çıplaklık kontrolü (NPC ise)
                 if (!needsFix) {
-                    auto race = actor->GetRace();
-                    if (race && race->HasKeywordString("ActorTypeNPC")) {
-                        auto chestArmor = actor->GetWornArmor(RE::BIPED_MODEL::BipedObjectSlot::kBody);
+                    if (IsHumanoidNPC(actor)) {
+                        RE::TESObjectARMO* chestArmor = nullptr;
+                        if (actor->GetActorRuntimeData().currentProcess) {
+                            chestArmor = actor->GetWornArmor(RE::BIPED_MODEL::BipedObjectSlot::kBody);
+                        }
+                        
                         if (!chestArmor) {
                             logger::info("[Çıplaklık] {} ({:08X}) tespit edildi.", actor->GetName(), formID);
                             needsFix = true;
@@ -173,7 +207,9 @@ namespace VisibilityFixer
             pendingFixQueue.push_back(pending);
             actorFixTimestamps[formID] = now; // Fix zamanını kaydet
             
-            logger::info(" -> Aktör kuyruğa eklendi, 0.2s sonra düzeltilecek.");
+            if (Settings::GetSingleton().logFixes) {
+                logger::info(" -> Aktör kuyruğa eklendi ({:08X}), 0.2s sonra düzeltilecek.", formID);
+            }
         }
     }
 
@@ -222,8 +258,8 @@ namespace VisibilityFixer
     {
         auto now = std::chrono::steady_clock::now();
         
-        // Stabilizasyon için ilk 10 saniye işlem yapma (Yeni oyun/Load sonrası)
-        if (now - systemStartTime < 10s) {
+        // Stabilizasyon için baslangic gecikmesi (Settings üzerinden)
+        if (now - systemStartTime < std::chrono::seconds(Settings::GetSingleton().startupDelay)) {
             return;
         }
 
@@ -231,8 +267,8 @@ namespace VisibilityFixer
         ProcessQueue(now);
 
         static auto lastUpdate = now;
-        // 5 saniyede bir kontrol et (Update süresini büyüt kuralı)
-        if (now - lastUpdate > 5s) {
+        // Taramalar arası bekleme (Settings üzerinden)
+        if (now - lastUpdate > std::chrono::seconds(Settings::GetSingleton().scanInterval)) {
             ProcessFixes(false);
             lastUpdate = now;
         }
@@ -251,8 +287,8 @@ namespace VisibilityFixer
 
     void Install()
     {
-        // Main::Update (Skyrim AE 1.6.1170 için ID 35551, Offset 0x11F)
-        REL::Relocation<std::uintptr_t> target{ REL::ID(35551), 0x11F }; 
+        // Main::Update (Skyrim SE 1.5.97 için ID 35551, Offset 0x11F | Skyrim AE 1.6+ için ID 36544, Offset 0x160 | Skyrim VR için Offset 0x11F)
+        REL::Relocation<std::uintptr_t> target{ REL::RelocationID(35551, 36544), static_cast<std::ptrdiff_t>(REL::VariantOffset(0x11F, 0x160, 0x11F).offset()) }; 
         
         SKSE::AllocTrampoline(14);
         MainUpdateHook::func = SKSE::GetTrampoline().write_call<5>(target.address(), MainUpdateHook::thunk);

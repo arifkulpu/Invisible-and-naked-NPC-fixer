@@ -1,5 +1,6 @@
 #include "PCH.h"
 #include "VisibilityFixer.h"
+#include "Settings.h"
 
 void InitializeLog() {
     auto path = logger::log_directory();
@@ -17,18 +18,14 @@ void InitializeLog() {
     spdlog::set_pattern("[%H:%M:%S] %v"s);
 }
 
-// MODERN SKSE EXPORTS (Skyrim AE 1.6.1170 için gerekli)
-extern "C" __declspec(dllexport) constinit SKSE::PluginVersionData SKSEPlugin_Version = []() {
-    SKSE::PluginVersionData v;
-    v.PluginVersion({ 1, 0, 0, 0 });
-    v.PluginName("NPC Fixer");
-    v.AuthorName("Antigravity");
-    v.UsesAddressLibrary();
-    v.UsesNoStructs();
-    v.CompatibleVersions({ SKSE::RUNTIME_SSE_LATEST });
+SKSEPluginInfo(
+    .Version = { 1, 0, 0, 0 },
+    .Name = "NPC Fixer",
+    .Author = "arifkulpu",
+    .RuntimeCompatibility = SKSE::VersionIndependence::AddressLibrary
+);
 
-    return v;
-}();
+// Sürüm sorgulama (Query) makro tarafından otomatik yapılıyor.
 
 namespace Console {
     bool FixNpcs(const RE::SCRIPT_PARAMETER*, RE::SCRIPT_FUNCTION::ScriptData*, RE::TESObjectREFR*, RE::TESObjectREFR*, RE::Script*, RE::ScriptLocals*, double&, std::uint32_t&) {
@@ -89,9 +86,13 @@ void OnMessage(SKSE::MessagingInterface::Message* a_msg) {
     }
 }
 
-extern "C" __declspec(dllexport) bool __cdecl SKSEPlugin_Load(const SKSE::LoadInterface* a_skse) {
+SKSEPluginLoad(SKSE::LoadInterface* a_skse) {
     InitializeLog();
-    logger::info("NPC Fixer yukleniyor...");
+    
+    Settings::GetSingleton().Load();
+
+    auto ver = a_skse->RuntimeVersion();
+    logger::info("NPC Fixer yukleniyor (Yuklenen Oyun Surumu: {})", ver.string());
 
     SKSE::Init(a_skse);
 
