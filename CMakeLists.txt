@@ -32,6 +32,7 @@ target_compile_definitions(${PROJECT_NAME}
         PROJECT_NAME="${PROJECT_NAME}"
 )
 
+set_target_properties(${PROJECT_NAME} PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 
 # Precompiled headers
