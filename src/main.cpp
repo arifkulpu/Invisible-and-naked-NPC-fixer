@@ -2,6 +2,10 @@
 #include "VisibilityFixer.h"
 #include "Settings.h"
 
+// Linker workaround for MSVC STL mismatch (LNK2001: __std_regex_transform_primary_char)
+extern "C" void __std_regex_transform_primary_char() {}
+
+
 void InitializeLog() {
     auto path = logger::log_directory();
     if (!path) return;

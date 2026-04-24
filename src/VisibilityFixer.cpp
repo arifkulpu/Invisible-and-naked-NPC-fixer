@@ -181,6 +181,24 @@ namespace VisibilityFixer
     };
 
     // -----------------------------------------------------------------------
+    // Aktörün düzeltilmeye uygun olup olmadığını kontrol eder.
+    // Diyalogda, savaşta veya quest objesi olan aktörlere dokunmuyoruz.
+    // -----------------------------------------------------------------------
+    bool IsProtectedActor(RE::Actor* actor)
+    {
+        if (!actor) return true;
+
+        // 1. Diyalog kontrolü
+        if (actor->GetActorRuntimeData().dialogueItemTarget.get()) return true;
+
+        // 2. Savaş kontrolü
+        if (actor->IsInCombat()) return true;
+
+        // 3. Quest objesi kontrolü (Alias veya Quest flag)
+        if (actor->HasQuestObject()) return true;
+
+        return false;
+    }
 
     bool IsHumanoidNPC(RE::Actor* a_actor)
     {
@@ -257,6 +275,11 @@ namespace VisibilityFixer
                         if (item && item->IsArmor()) {
                             auto armor = item->As<RE::TESObjectARMO>();
                             if (armor && armor->HasPartOf(RE::BIPED_MODEL::BipedObjectSlot::kBody)) {
+                                // 4. Equip spam yapma
+                                if (actor->GetWornArmor(armor->GetFormID())) {
+                                    continue;
+                                }
+
                                 logger::info(" -> Envanterde zırh bulundu: {}. Giydiriliyor...", armor->GetName());
                                 RE::ActorEquipManager::GetSingleton()->EquipObject(actor, armor, nullptr, 1, nullptr, true, false, false, false);
                                 fixed = true;
@@ -307,6 +330,12 @@ namespace VisibilityFixer
     {
         if (!actor || actor->IsPlayerRef() || actor->IsDeleted()) return;
         if (actor->IsDisabled()) return;
+
+        // 3. BU AKTÖRLERE DOKUNMA
+        if (!a_force && IsProtectedActor(actor)) return;
+
+        // Sadece humanoid NPC'ler için işlem yapalım
+        if (!IsHumanoidNPC(actor)) return;
 
         auto formID = actor->GetFormID();
 
@@ -372,36 +401,20 @@ namespace VisibilityFixer
         if (needsFix) {
             PendingFix pending;
             pending.actorHandle = actor->GetHandle();
-            pending.fixTime     = now + 200ms;
+            
+            // 2. DELAY şart (0.5s)
+            pending.fixTime     = now + 500ms;
             
             pendingFixQueue.push_back(pending);
             actorFixTimestamps[formID] = now;
             
             if (Settings::GetSingleton().logFixes) {
-                logger::info(" -> Aktör kuyruğa eklendi ({:08X}), 0.2s sonra düzeltilecek.", formID);
+                logger::info(" -> Aktör kuyruğa eklendi ({:08X}), 0.5s sonra düzeltilecek.", formID);
             }
         }
     }
 
     // -----------------------------------------------------------------------
-
-    void ProcessFixes(bool a_force)
-    {
-        auto ui = RE::UI::GetSingleton();
-        if (ui && ui->GameIsPaused()) return;
-
-        auto processLists = RE::ProcessLists::GetSingleton();
-        if (!processLists) return;
-
-        auto now = std::chrono::steady_clock::now();
-
-        for (auto& handle : processLists->highActorHandles) {
-            auto actor = handle.get();
-            if (actor) {
-                FixActor(actor.get(), now, a_force);
-            }
-        }
-    }
 
     void ProcessQueue(std::chrono::steady_clock::time_point now)
     {
@@ -423,6 +436,63 @@ namespace VisibilityFixer
         }
     }
 
+    void ProcessFixes(bool a_force)
+    {
+        auto ui = RE::UI::GetSingleton();
+        if (ui && ui->GameIsPaused()) return;
+
+        auto processLists = RE::ProcessLists::GetSingleton();
+        if (!processLists) return;
+
+        auto now = std::chrono::steady_clock::now();
+
+        for (auto& handle : processLists->highActorHandles) {
+            auto actor = handle.get();
+            if (actor) {
+                FixActor(actor.get(), now, a_force);
+            }
+        }
+    }
+
+    // --- Event-Based System ---
+
+    class ObjectLoadedHandler : public RE::BSTEventSink<RE::TESObjectLoadedEvent>
+    {
+    public:
+        RE::BSEventNotifyControl ProcessEvent(const RE::TESObjectLoadedEvent* a_event, RE::BSTEventSource<RE::TESObjectLoadedEvent>*) override
+        {
+            if (!a_event || !a_event->loaded) return RE::BSEventNotifyControl::kContinue;
+            auto actor = RE::TESForm::LookupByID<RE::Actor>(a_event->formID);
+            if (actor && !actor->IsPlayerRef()) {
+                FixActor(actor, std::chrono::steady_clock::now(), false);
+            }
+            return RE::BSEventNotifyControl::kContinue;
+        }
+        static ObjectLoadedHandler* GetSingleton() { static ObjectLoadedHandler singleton; return &singleton; }
+    };
+
+    class ContainerChangedHandler : public RE::BSTEventSink<RE::TESContainerChangedEvent>
+    {
+    public:
+        RE::BSEventNotifyControl ProcessEvent(const RE::TESContainerChangedEvent* a_event, RE::BSTEventSource<RE::TESContainerChangedEvent>*) override
+        {
+            if (!a_event) return RE::BSEventNotifyControl::kContinue;
+            auto now = std::chrono::steady_clock::now();
+
+            // 5. Inventory değişirken işlem yapma (Queue + Delay FixActor içinde yapılıyor)
+            auto oldActor = RE::TESForm::LookupByID<RE::Actor>(a_event->oldContainer);
+            if (oldActor && !oldActor->IsPlayerRef()) {
+                FixActor(oldActor, now, false);
+            }
+            auto newActor = RE::TESForm::LookupByID<RE::Actor>(a_event->newContainer);
+            if (newActor && !newActor->IsPlayerRef()) {
+                FixActor(newActor, now, false);
+            }
+            return RE::BSEventNotifyControl::kContinue;
+        }
+        static ContainerChangedHandler* GetSingleton() { static ContainerChangedHandler singleton; return &singleton; }
+    };
+
     void Update()
     {
         auto now = std::chrono::steady_clock::now();
@@ -431,10 +501,12 @@ namespace VisibilityFixer
             return;
         }
 
+        // 5. Inventory değişirken işlem yapma: kuyruk + gecikme ile çalışır
         ProcessQueue(now);
 
+        // 1. LOOP’U azalt (Olay bazlı sisteme geçildi)
         static auto lastUpdate = now;
-        if (now - lastUpdate > std::chrono::seconds(Settings::GetSingleton().scanInterval)) {
+        if (now - lastUpdate > std::chrono::seconds(Settings::GetSingleton().scanInterval * 6)) { // 6 kat daha seyrek (varsayılan 30s)
             ProcessFixes(false);
             lastUpdate = now;
         }
@@ -479,6 +551,13 @@ namespace VisibilityFixer
         if (modCallbackSource) {
             modCallbackSource->AddEventSink(SceneEventHandler::GetSingleton());
             logger::info("VisibilityFixer: ModCallback olaylari (OStim/SexLab) kaydedildi.");
+        }
+
+        auto scriptEventSource = RE::ScriptEventSourceHolder::GetSingleton();
+        if (scriptEventSource) {
+            scriptEventSource->AddEventSink<RE::TESObjectLoadedEvent>(ObjectLoadedHandler::GetSingleton());
+            scriptEventSource->AddEventSink<RE::TESContainerChangedEvent>(ContainerChangedHandler::GetSingleton());
+            logger::info("VisibilityFixer: TES olaylari (Load/Container) kaydedildi.");
         }
 
         logger::info("VisibilityFixer: Sistem basariyla yuklendi.");

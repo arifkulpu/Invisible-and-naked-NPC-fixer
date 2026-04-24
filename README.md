@@ -11,9 +11,11 @@ A modular and high-performance SKSE plugin designed to automatically detect and 
 - **Naked NPC Fix**: Scans for actors missing body armor/clothing. It checks both the outfit system and the actor's inventory to automatically re-equip missing items.
 - **Headless NPC Fix**: Identifies actors with missing head models (FaceGen nodes) and refreshes them.
 - **Anti-Flicker Mechanism**: Resets initialization flags and animation states to prevent NPCs from constantly appearing and disappearing.
-- **Custom Race Compatibility**: Broadened detection logic to support NPCs from custom race mods. It identifies actors based on playable flags, FaceGen data, and outfit definitions even if they lack standard keywords.
+- **Event-Driven Architecture**: Migrated from a heavy polling loop to a high-performance event-based system. Uses `TESObjectLoadedEvent` and `TESContainerChangedEvent` to trigger fixes only when necessary, significantly reducing CPU overhead.
+- **SexLab & OStim Integration**: Robust scene-aware protection. Prevents the plugin from interfering with NPCs during SexLab stages or OStim animations to avoid scene breaking or premature re-equipping.
+- **Gameplay Protection Logic**: Automatically detects and protects actors currently in **Dialogue, Combat, or Quest** states to ensure immersion and quest stability.
+- **Spam & Race Protection**: Includes a 0.5s safety delay and queue system to prevent equipment spam. Supports custom race mods and uses actor-specific cooldowns.
 - **Console Command**: Adds `fixnpcs` (or `fnp`) command to manually refresh all nearby actors without waiting for the auto-scan.
-- **High Performance & Stability**: Optimized loop running every 5 seconds. Uses a **60-second cooldown per actor** to prevent engine spamming. Includes menu/loading screen protection and a game startup delay to ensure absolute stability. Compatible with `ConsoleUtilSSE`.
 - **VR Support**: Fully compatible with Skyrim VR (1.4.15) and the VR Address Library.
 
 #### Requirements
@@ -34,11 +36,12 @@ A modular and high-performance SKSE plugin designed to automatically detect and 
 #### Özellikler
 - **Görünmez NPC ve Ceset Düzeltmesi**: Motor üzerinde var olan ancak görseli yüklenmeyen (hayalet) NPC'leri ve **görünmez cesetleri (Ghost Corpses)** tespit eder. `Load3D()` kullanarak modelleri zorla geri getirir.
 - **Çıplak NPC Düzeltmesi**: Vücut zırhı veya kıyafeti eksik olan NPC'leri tarar. Hem kıyafet seti (outfit) sistemini hem de NPC'nin envanterini kontrol ederek eksik eşyaları otomatik giydirir.
-- **Başsız NPC Düzeltmesi**: Kafa modeli (FaceGen) yüklenememiş aktörleri tespit eder ve 3D modellerini tazeler.
-- **Flicker (Kaybolma) Engelleme**: Başlangıç bayraklarını ve animasyon sistemini sıfırlayarak NPC'lerin saniyelik olarak görünüp tekrar kaybolmalarını önler.
+- **Olay Bazlı (Event-Driven) Sistem**: Sürekli tarama yapan ağır döngü yerine `TESObjectLoadedEvent` ve `TESContainerChangedEvent` kullanan modern sistem. Sadece gerekli anlarda tetiklenerek CPU kullanımını minimize eder.
+- **SexLab ve OStim Entegrasyonu**: Aktif sahneleri algılar. Animasyon sırasında NPC'lerin kıyafetlerinin motor tarafından zorla giydirilmesini veya sahnenin bozulmasını engeller.
+- **Gelişmiş Koruma Mantığı**: **Diyalog, Savaş veya Quest (Görev)** aşamasındaki aktörleri otomatik korumaya alır. Bu sayede görevlerin bozulması veya daldırma (immersion) kaybı önlenir.
+- **Kuyruk ve Spam Koruması**: İşlemler arasına 0.5 saniyelik güvenlik gecikmesi ve her aktöre özel bekleme süresi (cooldown) eklenerek motorun yorulması engellenir.
 - **Konsol Komutu**: Otomatik taramayı beklemeden, konsola `fixnpcs` (veya `fnp`) yazarak yakındaki tüm aktörleri anında yenileyebilirsiniz.
-- **Yüksek Performans ve Stabilite**: Döngü her 5 saniyede bir çalışır. Motoru yormamak için her aktör başına **60 saniyelik bekleme süresi (cooldown)** uygular. Menüdeyken veya yükleme ekranlarında duraklayarak çökmeleri önler. Yeni oyun/kayıt yükleme başlangıcında 10 sn stabilizasyon gecikmesi eklidir.
-- **VR ve Yeni Irk Desteği**: Skyrim VR ile tam uyumludur. Özel ırk modlarıyla eklenen NPC'leri (Custom Races) otomatik olarak algılar ve düzeltir.
+- **VR ve Özel Irk Desteği**: Skyrim VR ile tam uyumludur. Özel ırk modlarıyla (Custom Races) eklenen NPC'leri algılar ve düzeltir.
 
 #### Kurulum
 1. `NakedNPCFix.dll` dosyasını indirin.
