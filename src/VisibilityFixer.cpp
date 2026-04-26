@@ -197,6 +197,30 @@ namespace VisibilityFixer
         // 3. Quest objesi kontrolü (Alias veya Quest flag)
         if (actor->HasQuestObject()) return true;
 
+        // 4. Takipçi koruması (AFT, NFF, Simple Outfit System vb. uyumluluğu için)
+        if (Settings::GetSingleton().ignoreFollowers) {
+            // IsPlayerTeammate flag'i takipçi modlarının çoğunda (NFF, AFT, EFF) aktör takipçiyken set edilir.
+            if (actor->IsPlayerTeammate()) return true;
+
+            // Summon/Binek kontrolü
+            if (actor->IsCommandedActor()) return true;
+            
+            // Bilinen takipçi faction'ları (Vanilla + DLC)
+            static const RE::FormID followerFactions[] = {
+                0x0005C84E, // CurrentFollowerFaction
+                0x000BDED9, // CurrentHirelingFaction
+                0x0001CB27, // DarkBrotherhoodInitiateFaction
+                0x00023471, // SeranaFaction
+            };
+
+            for (auto factionID : followerFactions) {
+                auto faction = RE::TESForm::LookupByID<RE::TESFaction>(factionID);
+                if (faction && actor->IsInFaction(faction)) {
+                    return true;
+                }
+            }
+        }
+
         return false;
     }
 
@@ -206,6 +230,14 @@ namespace VisibilityFixer
         
         auto race = a_actor->GetRace();
         if (!race) return false;
+
+        // Hayvanları, yaratıkları ve binekleri kesin olarak filtrele (örneğin at eyerlerinin silinmesini önler)
+        if (race->HasKeywordString("ActorTypeHorse") || 
+            race->HasKeywordString("ActorTypeAnimal") || 
+            race->HasKeywordString("ActorTypeCreature") ||
+            race->HasKeywordString("ActorTypeDragon")) {
+            return false;
+        }
 
         if (race->HasKeywordString("ActorTypeNPC") || race->HasKeywordString("ActorTypeHumanoid")) {
             return true;
@@ -291,9 +323,14 @@ namespace VisibilityFixer
                     if (!fixed) {
                         auto npcBase = actor->GetActorBase();
                         if (npcBase && (npcBase->defaultOutfit || npcBase->sleepOutfit)) {
-                            logger::info(" -> Outfit tanımlı. Envanter sıfırlanıyor...");
-                            actor->ResetInventory(false);
-                            fixed = true;
+                            // Sadece takipçi OLMAYANLAR için ResetInventory yapalım (Tehlikeli işlem)
+                            if (!actor->IsPlayerTeammate()) {
+                                logger::info(" -> Outfit tanımlı. Envanter sıfırlanıyor...");
+                                actor->ResetInventory(false);
+                                fixed = true;
+                            } else {
+                                logger::info(" -> Takipçi için ResetInventory atlandı (Kıyafet kaybını önlemek için).");
+                            }
                         }
                     }
                 }

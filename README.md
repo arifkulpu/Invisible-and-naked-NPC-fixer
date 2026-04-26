@@ -15,12 +15,14 @@ A modular and high-performance SKSE plugin designed to automatically detect and 
 - **SexLab & OStim Integration**: Robust scene-aware protection. Prevents the plugin from interfering with NPCs during SexLab stages or OStim animations to avoid scene breaking or premature re-equipping.
 - **Gameplay Protection Logic**: Automatically detects and protects actors currently in **Dialogue, Combat, or Quest** states to ensure immersion and quest stability.
 - **Spam & Race Protection**: Includes a 0.5s safety delay and queue system to prevent equipment spam. Supports custom race mods and uses actor-specific cooldowns.
+- **Follower Mod Compatibility**: Added robust protection for follower frameworks like **AFT, NFF, EFF, and Simple Outfit System**. The plugin automatically ignores actors marked as `IsPlayerTeammate` or in common follower factions to prevent conflicts. Destructive inventory resets are disabled for followers to prevent equipment loss.
 - **Console Command**: Adds `fixnpcs` (or `fnp`) command to manually refresh all nearby actors without waiting for the auto-scan.
 - **VR Support**: Fully compatible with Skyrim VR (1.4.15) and the VR Address Library.
 
 #### Requirements
 - [SKSE64](https://skse.silverlock.org/)
 - [Address Library for SKSE Plugins](https://www.nexusmods.com/skyrimspecialedition/mods/32444) / [Address Library for SKSE VR](https://www.nexusmods.com/skyrimspecialedition/mods/58101)
+- [Microsoft Visual C++ Redistributable 2019-2022](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
 - Skyrim SE (1.5.97), AE (1.6+), or VR (1.4.15)
 
 #### Installation
@@ -42,6 +44,12 @@ A modular and high-performance SKSE plugin designed to automatically detect and 
 - **Kuyruk ve Spam Koruması**: İşlemler arasına 0.5 saniyelik güvenlik gecikmesi ve her aktöre özel bekleme süresi (cooldown) eklenerek motorun yorulması engellenir.
 - **Konsol Komutu**: Otomatik taramayı beklemeden, konsola `fixnpcs` (veya `fnp`) yazarak yakındaki tüm aktörleri anında yenileyebilirsiniz.
 - **VR ve Özel Irk Desteği**: Skyrim VR ile tam uyumludur. Özel ırk modlarıyla (Custom Races) eklenen NPC'leri algılar ve düzeltir.
+- **Takipçi Modu Uyumluluğu**: **AFT, NFF, EFF ve Simple Outfit System** gibi takipçi sistemleriyle tam uyum. `IsPlayerTeammate` bayrağına sahip veya takipçi faction'larındaki aktörler otomatik olarak yoksayılır. Takipçilerin özel kıyafet sistemlerini bozmamak için bu aktörlerde "Envanter Sıfırlama" işlemi devre dışı bırakılmıştır.
+
+#### Gereksinimler
+- [SKSE64](https://skse.silverlock.org/)
+- [Address Library for SKSE Plugins](https://www.nexusmods.com/skyrimspecialedition/mods/32444)
+- [Microsoft Visual C++ Redistributable 2019-2022](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
 
 #### Kurulum
 1. `NakedNPCFix.dll` dosyasını indirin.
