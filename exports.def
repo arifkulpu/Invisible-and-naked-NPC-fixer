@@ -1,4 +1,4 @@
-LIBRARY "NPCOutfitFixer"
+LIBRARY "NakedNPCFix"
 EXPORTS
 SKSEPlugin_Version
 SKSEPlugin_Query

@@ -16,6 +16,7 @@ target_sources(${PROJECT_NAME}
         src/VisibilityFixer.cpp
         src/Settings.h
         src/PCH.h
+        exports.def
 )
 
 target_link_libraries(${PROJECT_NAME} 
@@ -32,11 +33,10 @@ target_compile_definitions(${PROJECT_NAME}
         PROJECT_NAME="${PROJECT_NAME}"
 )
 
-# set_target_properties(${PROJECT_NAME} PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-
-
-# Precompiled headers
-# target_precompiled_headers(${PROJECT_NAME} PRIVATE src/PCH.h)
+# Use static runtime to avoid missing DLL errors on user machines
+set_target_properties(${PROJECT_NAME} PROPERTIES 
+    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+)
 
 # PCH support
 if(MSVC)
