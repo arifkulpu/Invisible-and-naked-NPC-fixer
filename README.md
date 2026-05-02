@@ -68,3 +68,7 @@ cmake --build build --config Release
 ## Credits
 - Developed by Antigravity (Pair Programming with arifkulpu)
 - Uses [CommonLibSSE-NG](https://github.com/CharmedBaryon/CommonLibSSE-NG)
+
+## License / Lisans
+Copyright (c) 2026 Arif KULPU. All Rights Reserved. — Tüm Hakları Saklıdır.
+See LICENSE for details.
